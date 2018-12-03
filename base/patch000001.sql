@@ -29,7 +29,8 @@ ALTER TABLE misc.tconta_alm
 /***********************************F-SCP-RCM-MISC-1-23/08/2018****************************************/
 
 /***********************************I-SCP-RCM-MISC-1-31/08/2018****************************************/
-CREATE FOREIGN TABLE misc.sigema_almacen_salida (
+--Todo lo relacionado al SIGEMA (datawrapper a MSSQL). TODO: aumentar lógica para crear estos objetos en función de alguna bandera
+/*CREATE FOREIGN TABLE misc.sigema_almacen_salida (
   fecha DATE,
   nro_ot VARCHAR,
   centro_costo VARCHAR,
@@ -68,7 +69,7 @@ create table misc.tdepto_regional_sigema (
 	id_depto integer NOT NULL,
 	codigo_regional_sigema varchar(30),
 	constraint pk_tdepto_regional_sigema__id_depto_regional_sigema primary key (id_depto_regional_sigema)
-) inherits (pxp.tbase) without oids;
+) inherits (pxp.tbase) without oids;*/
 
 /***********************************F-SCP-RCM-MISC-1-31/08/2018****************************************/
 
