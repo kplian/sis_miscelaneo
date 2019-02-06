@@ -150,3 +150,78 @@ AS
 
 
 /***********************************F-DEP-CAP-MISC-0-04/12/2018****************************************/
+
+/***********************************I-DEP-RCM-MISC-0-05/02/2019****************************************/
+CREATE OR REPLACE VIEW misc.vconta_almacen_det(
+    id_conta_alm,
+    fecha_cbte,
+    id_gestion,
+    importe,
+    id_depto_conta,
+    id_cuenta_debe,
+    id_cuenta_haber,
+    id_centro_costo,
+    id_partida_debe,
+    id_partida_haber,
+    descripcion,
+    tipo_pres)
+AS
+WITH tdescrip AS(
+  SELECT ca_1.id_conta_alm,
+         cal_1.cuenta_contable_haber,
+         cal_1.codigo_centro_costo,
+         (pxp.list(DISTINCT cal_1.nro_ot::text) || ', Materiales: '::text) ||
+           pxp.list(DISTINCT cal_1.codigo_material::text) AS descripcion
+  FROM misc.tconta_alm ca_1
+       JOIN misc.tconta_alm_det cal_1 ON cal_1.id_conta_alm = ca_1.id_conta_alm
+  GROUP BY ca_1.id_conta_alm,
+           cal_1.cuenta_contable_haber,
+           cal_1.codigo_centro_costo)
+    SELECT ca.id_conta_alm,
+           now()::date AS fecha_cbte,
+           per.id_gestion,
+           sum(cal.total) AS importe,
+           ca.id_depto_conta,
+           cal.id_cuenta_debe,
+           cal.id_cuenta_haber,
+           cc1.id_centro_costo,
+           par.id_partida AS id_partida_debe,
+           par1.id_partida AS id_partida_haber,
+           (
+             SELECT tdescrip.descripcion
+             FROM tdescrip
+             WHERE tdescrip.id_conta_alm = ca.id_conta_alm AND
+                   tdescrip.codigo_centro_costo::text = cal.codigo_centro_costo
+                     ::text AND
+                   tdescrip.cuenta_contable_haber::text =
+                     cal.cuenta_contable_haber::text
+           ) AS descripcion,
+           pre.tipo_pres
+    FROM misc.tconta_alm ca
+         JOIN misc.tconta_alm_det cal ON cal.id_conta_alm = ca.id_conta_alm
+         JOIN param.tperiodo per ON per.id_periodo = ca.id_periodo
+         LEFT JOIN pre.tpartida par ON par.codigo::text = '22900'::text AND
+           par.id_gestion = per.id_gestion
+         LEFT JOIN pre.tpartida par1 ON par1.codigo::text = '22900'::text AND
+           par1.id_gestion = per.id_gestion
+         JOIN pre.tpresupuesto pre ON pre.id_centro_costo = cal.id_centro_costo
+         JOIN param.tcentro_costo cc ON cc.id_centro_costo = cal.id_centro_costo
+         JOIN param.tcentro_costo cc1 ON cc1.id_tipo_cc = cc.id_tipo_cc AND
+           cc1.id_gestion =((
+                              SELECT tgestion.id_gestion
+                              FROM param.tgestion
+                              WHERE date_trunc('year'::text, tgestion.fecha_ini
+                                ::timestamp with time zone) = date_trunc('year'
+                                ::text, ca.fecha_fin::timestamp with time zone)
+         ))
+    GROUP BY ca.id_conta_alm,
+             per.id_gestion,
+             cal.id_cuenta_debe,
+             cal.id_cuenta_haber,
+             cc1.id_centro_costo,
+             par.id_partida,
+             par1.id_partida,
+             cal.codigo_centro_costo,
+             cal.cuenta_contable_haber,
+             pre.tipo_pres;
+/***********************************F-DEP-RCM-MISC-0-05/02/2019****************************************/
