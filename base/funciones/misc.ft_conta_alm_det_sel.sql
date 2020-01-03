@@ -1,7 +1,11 @@
-CREATE OR REPLACE FUNCTION "misc"."ft_conta_alm_det_sel"(
-				p_administrador integer, p_id_usuario integer, p_tabla character varying, p_transaccion character varying)
-RETURNS character varying AS
-$BODY$
+CREATE OR REPLACE FUNCTION misc.ft_conta_alm_det_sel (
+  p_administrador integer,
+  p_id_usuario integer,
+  p_tabla varchar,
+  p_transaccion varchar
+)
+RETURNS varchar AS
+$body$
 /**************************************************************************
  SISTEMA:		Miscelaneo
  FUNCION: 		misc.ft_conta_alm_det_sel
@@ -10,11 +14,11 @@ $BODY$
  FECHA:	        11-10-2018 13:47:00
  COMENTARIOS:
 ***************************************************************************
- HISTORIAL DE MODIFICACIONES:
-#ISSUE				FECHA				AUTOR				DESCRIPCION
- #0				11-10-2018 13:47:00								Funcion que devuelve conjuntos de registros de las consultas relacionadas con la tabla 'misc.tconta_alm_det'
- #
- ***************************************************************************/
+ ISSUE  SIS       EMPRESA       FECHA       AUTOR       DESCRIPCION
+ #4     MISC       ETR          11/10/2018  RCM         Funcion que devuelve conjuntos de registros de las consultas relacionadas con la tabla 'misc.tconta_alm_det'
+ #2     MISC       ETR          03/01/2020  RCM         Problema al generar cbte. No encuentra movimientos aunque si hay en el detalle
+***************************************************************************/
+
 
 DECLARE
 
@@ -50,7 +54,8 @@ BEGIN
     			into v_id_gestion
     			from misc.tconta_alm ca
     			inner join param.tperiodo per
-    			on per.id_periodo = ca.id_periodo;
+    			on per.id_periodo = ca.id_periodo
+    			where id_conta_alm = v_parametros.id_conta_alm; --#2
 
     			--Elimina los datos
     			delete from misc.tconta_alm_det where id_conta_alm = v_parametros.id_conta_alm;
@@ -290,7 +295,12 @@ EXCEPTION
 			v_resp = pxp.f_agrega_clave(v_resp,'procedimientos',v_nombre_funcion);
 			raise exception '%',v_resp;
 END;
-$BODY$
-LANGUAGE 'plpgsql' VOLATILE
+$body$
+LANGUAGE 'plpgsql'
+VOLATILE
+CALLED ON NULL INPUT
+SECURITY INVOKER
 COST 100;
-ALTER FUNCTION "misc"."ft_conta_alm_det_sel"(integer, integer, character varying, character varying) OWNER TO postgres;
+
+ALTER FUNCTION misc.ft_conta_alm_det_sel (p_administrador integer, p_id_usuario integer, p_tabla varchar, p_transaccion varchar)
+  OWNER TO postgres;
