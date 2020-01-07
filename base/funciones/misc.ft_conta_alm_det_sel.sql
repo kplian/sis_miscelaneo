@@ -1,7 +1,11 @@
-CREATE OR REPLACE FUNCTION "misc"."ft_conta_alm_det_sel"(
-				p_administrador integer, p_id_usuario integer, p_tabla character varying, p_transaccion character varying)
-RETURNS character varying AS
-$BODY$
+CREATE OR REPLACE FUNCTION misc.ft_conta_alm_det_sel (
+  p_administrador integer,
+  p_id_usuario integer,
+  p_tabla varchar,
+  p_transaccion varchar
+)
+RETURNS varchar AS
+$body$
 /**************************************************************************
  SISTEMA:		Miscelaneo
  FUNCION: 		misc.ft_conta_alm_det_sel
@@ -10,11 +14,11 @@ $BODY$
  FECHA:	        11-10-2018 13:47:00
  COMENTARIOS:
 ***************************************************************************
- HISTORIAL DE MODIFICACIONES:
-#ISSUE				FECHA				AUTOR				DESCRIPCION
- #0				11-10-2018 13:47:00								Funcion que devuelve conjuntos de registros de las consultas relacionadas con la tabla 'misc.tconta_alm_det'
- #
- ***************************************************************************/
+ ISSUE  SIS       EMPRESA       FECHA       AUTOR       DESCRIPCION
+ #4     MISC       ETR          11/10/2018  RCM         Funcion que devuelve conjuntos de registros de las consultas relacionadas con la tabla 'misc.tconta_alm_det'
+ #2     MISC       ETR          03/01/2020  RCM         Problema al generar cbte. No encuentra movimientos aunque si hay en el detalle
+***************************************************************************/
+
 
 DECLARE
 
@@ -23,6 +27,10 @@ DECLARE
 	v_nombre_funcion   	text;
 	v_resp				varchar;
 	v_id_gestion		integer;
+	--Inicio #2
+	v_gestion 			INTEGER;
+	v_cc_no_exist 		TEXT;
+	--Fin #2
 
 BEGIN
 
@@ -46,14 +54,62 @@ BEGIN
     				and estado = 'borrador') then
 
     			--Obtiene la gestión del registro de la contabilización
-    			select per.id_gestion
-    			into v_id_gestion
+    			select per.id_gestion, ges.gestion
+    			into v_id_gestion, v_gestion
     			from misc.tconta_alm ca
     			inner join param.tperiodo per
-    			on per.id_periodo = ca.id_periodo;
+    			on per.id_periodo = ca.id_periodo
+    			--Inicio #2
+    			INNER JOIN param.tgestion ges
+                ON ges.id_gestion = per.id_gestion
+    			WHERE id_conta_alm = v_parametros.id_conta_alm;
+    			--Fin #2
 
     			--Elimina los datos
     			delete from misc.tconta_alm_det where id_conta_alm = v_parametros.id_conta_alm;
+
+    			--Inicio #2: Verifica que existan todos los CC en la gestión seleccionada
+		        IF EXISTS(SELECT 1
+							FROM misc.vconta_almacen_det_grid conalmd
+							INNER JOIN misc.tdepto_regional_sigema rs
+							ON rs.codigo_regional_sigema = conalmd.centro_almacen
+							INNER JOIN param.ttipo_cc tcc
+							ON tcc.codigo = conalmd.codigo_centro_costo
+							LEFT JOIN param.tcentro_costo cc
+							ON cc.id_tipo_cc = tcc.id_tipo_cc
+							AND cc.id_gestion = v_id_gestion
+							WHERE rs.id_depto = v_parametros.id_depto_conta
+							and conalmd.id_detalle between date_trunc('day'::text, v_parametros.fecha_ini::timestamp with time zone)::date - '1900-01-01'::date and date_trunc('day'::text, v_parametros.fecha_fin::timestamp with time zone)::date - '1900-01-01'::date
+							AND cc.id_centro_costo IS NULL
+							AND NOT EXISTS (SELECT *
+							               FROM misc.tconta_alm_det cad
+							               WHERE cad.id_documento = conalmd.id_documento
+							               AND cad.tipo_documento = conalmd.tipo_documento)
+		        ) THEN
+
+
+		        	SELECT pxp.list(conalmd.codigo_centro_costo)
+		        	INTO v_cc_no_exist
+					FROM misc.vconta_almacen_det_grid conalmd
+					INNER JOIN misc.tdepto_regional_sigema rs
+					ON rs.codigo_regional_sigema = conalmd.centro_almacen
+					INNER JOIN param.ttipo_cc tcc
+					ON tcc.codigo = conalmd.codigo_centro_costo
+					LEFT JOIN param.tcentro_costo cc
+					ON cc.id_tipo_cc = tcc.id_tipo_cc
+					AND cc.id_gestion = v_id_gestion
+					WHERE rs.id_depto = v_parametros.id_depto_conta
+					and conalmd.id_detalle between date_trunc('day'::text, v_parametros.fecha_ini::timestamp with time zone)::date - '1900-01-01'::date and date_trunc('day'::text, v_parametros.fecha_fin::timestamp with time zone)::date - '1900-01-01'::date
+					AND cc.id_centro_costo IS NULL
+					AND NOT EXISTS (SELECT *
+					               FROM misc.tconta_alm_det cad
+					               WHERE cad.id_documento = conalmd.id_documento
+					               AND cad.tipo_documento = conalmd.tipo_documento);
+
+		        	RAISE EXCEPTION 'No existen registrados los siguientes Centros de Costo (en %): % ', v_gestion, v_cc_no_exist;
+
+		        END IF;
+  		        --Fin #2
 
     			--Carga nuevamente los datos
     			insert into misc.tconta_alm_det
@@ -290,7 +346,12 @@ EXCEPTION
 			v_resp = pxp.f_agrega_clave(v_resp,'procedimientos',v_nombre_funcion);
 			raise exception '%',v_resp;
 END;
-$BODY$
-LANGUAGE 'plpgsql' VOLATILE
+$body$
+LANGUAGE 'plpgsql'
+VOLATILE
+CALLED ON NULL INPUT
+SECURITY INVOKER
 COST 100;
-ALTER FUNCTION "misc"."ft_conta_alm_det_sel"(integer, integer, character varying, character varying) OWNER TO postgres;
+
+ALTER FUNCTION misc.ft_conta_alm_det_sel (p_administrador integer, p_id_usuario integer, p_tabla varchar, p_transaccion varchar)
+  OWNER TO postgres;
